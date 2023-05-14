@@ -1836,3 +1836,52 @@ TEST(parsing, unicode)
   epee::misc_utils::parse::match_string2(si, s.end(), bs);
   EXPECT_EQ(bs, "あまやかす");
 }
+
+TEST(parsing, strtol)
+{
+  long ul;
+  const char* p;
+  const char* endp;
+
+  p = "0";
+  endp = nullptr;
+  ul = std::strtoul(p, const_cast<char**>(&endp), 10);
+  EXPECT_EQ(0, errno);
+  EXPECT_EQ(0, ul);
+  EXPECT_EQ(p + 1, endp);
+
+  p = "000000";
+  endp = nullptr;
+  ul = std::strtoul(p, const_cast<char**>(&endp), 10);
+  EXPECT_EQ(0, errno);
+  EXPECT_EQ(0, ul);
+  EXPECT_EQ(p + 6, endp);
+
+  p = "1";
+  endp = nullptr;
+  ul = std::strtoul(p, const_cast<char**>(&endp), 10);
+  EXPECT_EQ(0, errno);
+  EXPECT_EQ(1, ul);
+  EXPECT_EQ(p + 1, endp);
+
+  p = "0q";
+  endp = nullptr;
+  ul = std::strtoul(p, const_cast<char**>(&endp), 10);
+  EXPECT_EQ(0, errno);
+  EXPECT_EQ(0, ul);
+  EXPECT_EQ(p + 1, endp);
+
+  p = "    \t   0";
+  endp = nullptr;
+  ul = std::strtoul(p, const_cast<char**>(&endp), 10);
+  EXPECT_EQ(0, errno);
+  EXPECT_EQ(0, ul);
+  EXPECT_EQ(p + 9, endp);
+
+  p = "q";
+  endp = nullptr;
+  ul = std::strtoul(p, const_cast<char**>(&endp), 10);
+  EXPECT_EQ(0, errno);
+  EXPECT_EQ(0, ul);
+  EXPECT_EQ(p, endp);
+}
