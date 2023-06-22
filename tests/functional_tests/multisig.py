@@ -29,6 +29,7 @@
 # THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 from __future__ import print_function
+import random
 
 """Test multisig transfers
 """
@@ -44,6 +45,7 @@ class MultisigTest():
         self.mine('41mro238grj56GnrWkakAKTkBy2yDcXYsUZ2iXCM9pe5Ueajd2RRc6Fhh3uBXT2UAKhAsUJ7Fg5zjjF2U1iGciFk5ief4ZP', 5)
         self.mine('44vZSprQKJQRFe6t1VHgU4ESvq2dv7TjBLVGE7QscKxMdFSiyyPCEV64NnKUQssFPyWxc2meyt7j63F2S2qtCTRL6dakeff', 5)
         self.mine('47puypSwsV1gvUDratmX4y58fSwikXVehEiBhVLxJA1gRCxHyrRgTDr4NnKUQssFPyWxc2meyt7j63F2S2qtCTRL6aRPj5U', 5)
+        self.mine('4A8RnBQixry4VXkqeWhmg8L7vWJVDJj4FN9PV4E7Mgad5ZZ6LKQdn8dYJP2RePX6HMaSkbvTbrWUFhDNcNcHgtNmQ4S8RSB', 5)
         self.mine('42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm', 80)
 
         self.test_states()
@@ -54,10 +56,22 @@ class MultisigTest():
         self.import_multisig_info([0, 1], 6)
         self.check_transaction(txid)
 
+        self.remake_some_multisig_wallets_by_multsig_seed(2)
+        self.import_multisig_info([0, 1], 6) # six outputs, same as before
+        txid = self.transfer([0, 1])
+        self.import_multisig_info([0, 1], 7) # seven outputs b/c we're dest plus change
+        self.check_transaction(txid)
+
         self.create_multisig_wallets(2, 3, '44G2TQNfsiURKkvxp7gbgaJY8WynZvANnhmyMAwv6WeEbAvyAWMfKXRhh3uBXT2UAKhAsUJ7Fg5zjjF2U1iGciFk5duN94i')
         self.import_multisig_info([0, 2], 5)
         txid = self.transfer([0, 2])
         self.import_multisig_info([0, 1, 2], 6)
+        self.check_transaction(txid)
+
+        self.remake_some_multisig_wallets_by_multsig_seed(2)
+        self.import_multisig_info([0, 2], 6) # six outputs, same as before
+        txid = self.transfer([0, 2])
+        self.import_multisig_info([0, 1, 2], 7) # seven outputs b/c we're dest plus change
         self.check_transaction(txid)
 
         self.create_multisig_wallets(3, 3, '41mro238grj56GnrWkakAKTkBy2yDcXYsUZ2iXCM9pe5Ueajd2RRc6Fhh3uBXT2UAKhAsUJ7Fg5zjjF2U1iGciFk5ief4ZP')
@@ -66,10 +80,22 @@ class MultisigTest():
         self.import_multisig_info([0, 2, 1], 6)
         self.check_transaction(txid)
 
+        self.remake_some_multisig_wallets_by_multsig_seed(3)
+        self.import_multisig_info([2, 0, 1], 6) # six outputs, same as before
+        txid = self.transfer([2, 1, 0])
+        self.import_multisig_info([0, 2, 1], 7) # seven outputs b/c we're dest plus change
+        self.check_transaction(txid)
+
         self.create_multisig_wallets(3, 4, '44vZSprQKJQRFe6t1VHgU4ESvq2dv7TjBLVGE7QscKxMdFSiyyPCEV64NnKUQssFPyWxc2meyt7j63F2S2qtCTRL6dakeff')
         self.import_multisig_info([0, 2, 3], 5)
         txid = self.transfer([0, 2, 3])
         self.import_multisig_info([0, 1, 2, 3], 6)
+        self.check_transaction(txid)
+
+        self.remake_some_multisig_wallets_by_multsig_seed(3)
+        self.import_multisig_info([0, 2, 3], 6) # six outputs, same as before
+        txid = self.transfer([0, 2, 3])
+        self.import_multisig_info([0, 1, 2, 3], 7) # seven outputs b/c we're dest plus change
         self.check_transaction(txid)
 
         self.create_multisig_wallets(2, 4, '47puypSwsV1gvUDratmX4y58fSwikXVehEiBhVLxJA1gRCxHyrRgTDr4NnKUQssFPyWxc2meyt7j63F2S2qtCTRL6aRPj5U')
@@ -79,6 +105,24 @@ class MultisigTest():
         self.check_transaction(txid)
         txid = self.try_transfer_frozen([2, 3])
         self.import_multisig_info([0, 1, 2, 3], 7)
+        self.check_transaction(txid)
+
+        self.remake_some_multisig_wallets_by_multsig_seed(2)
+        self.import_multisig_info([0, 1, 2, 3], 6) # six outputs, same as before
+        txid = self.transfer([2, 3])
+        self.import_multisig_info([0, 1, 2, 3], 7) # seven outputs b/c we're dest plus change
+        self.check_transaction(txid)
+
+        self.create_multisig_wallets(1, 2, '4A8RnBQixry4VXkqeWhmg8L7vWJVDJj4FN9PV4E7Mgad5ZZ6LKQdn8dYJP2RePX6HMaSkbvTbrWUFhDNcNcHgtNmQ4S8RSB')
+        self.import_multisig_info([0, 1], 5)
+        txid = self.transfer([0])
+        self.import_multisig_info([0, 1], 6)
+        self.check_transaction(txid)
+
+        self.remake_some_multisig_wallets_by_multsig_seed(1)
+        self.import_multisig_info([0, 1], 6) # six outputs, same as before
+        txid = self.transfer([1])
+        self.import_multisig_info([0, 1], 7) # seven outputs b/c we're dest plus change
         self.check_transaction(txid)
 
     def reset(self):
@@ -149,7 +193,7 @@ class MultisigTest():
           next_stage.append(res.multisig_info)
           addresses.append(res.address)
       for i in range(N_total):
-        assert addresses[i] == expected_address
+        assert addresses[i] == expected_address, addresses[i]
       self.wallet_address = expected_address
 
       for i in range(N_total):
@@ -158,6 +202,42 @@ class MultisigTest():
         assert res.ready == True
         assert res.threshold == M_threshold
         assert res.total == N_total
+
+    def remake_some_multisig_wallets_by_multsig_seed(self, threshold):
+      N = len(self.wallet)
+      signers_to_remake = set()
+      num_signers_to_remake = random.randint(1, N) # Do at least one
+      while len(signers_to_remake) < num_signers_to_remake:
+        signers_to_remake.add(random.randint(0, N - 1))
+
+      for i in signers_to_remake:
+        print("Remaking {}/{} multsig wallet from multisig seed: #{}".format(threshold, N, i+1))
+
+        otherwise_unused_seed = \
+          'factual wiggle awakened maul sash biscuit pause reinvest fonts sleepless knowledge tossed jewels request gusts dagger gumball onward dotted amended powder cynical strained topic request'
+
+        # Get information about wallet, will compare against later
+        old_viewkey = self.wallet[i].query_key('view_key').key
+        old_spendkey = self.wallet[i].query_key('spend_key').key
+        old_multisig_seed = self.wallet[i].query_key('mnemonic').key
+
+        # Close old wallet and restore w/ random seed so we know that restoring actually did something
+        self.wallet[i].close_wallet()
+        self.wallet[i].restore_deterministic_wallet(seed=otherwise_unused_seed)
+        mid_viewkey = self.wallet[i].query_key('view_key').key
+        assert mid_viewkey != old_viewkey
+
+        # Now restore w/ old multisig seed and check against original
+        self.wallet[i].close_wallet()
+        self.wallet[i].restore_deterministic_wallet(seed=old_multisig_seed, enable_multisig_experimental=True)
+        new_viewkey = self.wallet[i].query_key('view_key').key
+        new_spendkey = self.wallet[i].query_key('spend_key').key
+        new_multisig_seed = self.wallet[i].query_key('mnemonic').key
+        assert new_viewkey == old_viewkey
+        assert new_spendkey == old_spendkey
+        assert new_multisig_seed == old_multisig_seed
+
+        self.wallet[i].refresh()
 
     def test_states(self):
         print('Testing multisig states')
@@ -251,7 +331,7 @@ class MultisigTest():
           assert res.n_outputs == expected_outputs
 
     def transfer(self, signers):
-        assert len(signers) >= 2
+        assert len(signers) >= 1
 
         daemon = Daemon()
 
