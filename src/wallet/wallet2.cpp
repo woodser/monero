@@ -8770,8 +8770,7 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> 
     light_wallet_get_outs(outs, selected_transfers, fake_outputs_count);
     return;
   }
-
-  if (fake_outputs_count > 0)
+  else if (!m_light_wallet && fake_outputs_count > 0)
   {
     uint64_t segregation_fork_height = get_segregation_fork_height();
     // check whether we're shortly after the fork
@@ -10168,9 +10167,12 @@ void wallet2::light_wallet_get_unspent_outs()
         MTRACE("Output " << o.public_key << " is spent. Key image: " <<  ski);
         spent = true;
         break;
-      } {
-        MTRACE("Unspent output found. " << o.public_key);
       }
+    }
+
+    if(!spent) 
+    {
+      MTRACE("Unspent output found. " << o.public_key);
     }
 
     // Check if tx already exists in m_transfers. 
@@ -10504,10 +10506,17 @@ bool wallet2::light_wallet_key_image_is_ours(const crypto::key_image& key_image,
     // pub key found. key image for index cached?
     index_keyimage_map = found_pub_key->second;
     std::map<uint64_t,crypto::key_image>::const_iterator index_found = index_keyimage_map.find(out_index);
-    if(index_found != index_keyimage_map.end())
+    if(index_found != index_keyimage_map.end()) {
+      MINFO("wallet2::light_wallet_key_image_is_ours checking by cache");
       return key_image == index_found->second;
+    }
   }
 
+  if (m_watch_only) {
+    // to do: check imported keys?
+    return false;
+  }
+  MINFO("wallet2::light_wallet_key_image_is_ours checking by keys");
   // Not in cache - calculate key image
   crypto::key_image calculated_key_image;
   cryptonote::keypair in_ephemeral;
@@ -13609,6 +13618,12 @@ uint64_t wallet2::import_key_images(const std::vector<std::pair<crypto::key_imag
     return 0;
   }
 
+  if (m_light_wallet)
+  {
+    // populate m_transfers
+    light_wallet_get_unspent_outs();
+  }
+
   req.key_images.reserve(signed_key_images.size());
 
   PERF_TIMER_START(import_key_images_A);
@@ -13646,6 +13661,29 @@ uint64_t wallet2::import_key_images(const std::vector<std::pair<crypto::key_imag
     m_transfers[n + offset].m_key_image_known = true;
     m_transfers[n + offset].m_key_image_request = false;
     m_transfers[n + offset].m_key_image_partial = false;
+
+    // to do: update light_wallet_key_image_is_ours cache
+    serializable_map<uint64_t, crypto::key_image> index_keyimage_map;
+    serializable_unordered_map<crypto::public_key, serializable_map<uint64_t, crypto::key_image> >::const_iterator found_pub_key = m_key_image_cache.find(m_transfers[n + offset].get_public_key());
+    if (found_pub_key == m_key_image_cache.end()) 
+    {
+      // pub key not found.
+      index_keyimage_map.emplace(n + offset, signed_key_images[n].first);
+      m_key_image_cache.emplace(m_transfers[n + offset].get_public_key(), index_keyimage_map);
+    } else 
+    {
+      // pub key found. key image for index cached?
+      index_keyimage_map = found_pub_key->second;
+      std::map<uint64_t,crypto::key_image>::iterator index_found = index_keyimage_map.find(n + offset);
+      if(index_found != index_keyimage_map.end() && signed_key_images[n].first != index_found->second)
+      {
+        // update key image
+        index_found->second = signed_key_images[n].first;
+      }
+      else if (index_found == index_keyimage_map.end()) {
+        index_keyimage_map.emplace(n + offset, signed_key_images[n].first);
+      }
+    }
   }
   PERF_TIMER_STOP(import_key_images_B);
 
