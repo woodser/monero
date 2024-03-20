@@ -8691,7 +8691,7 @@ void wallet2::light_wallet_get_outs(std::vector<std::vector<tools::wallet2::get_
       crypto::public_key tx_public_key;
       rct::key mask = AUTO_VAL_INIT(mask); // decrypted mask - not used here
       rct::key rct_commit = AUTO_VAL_INIT(rct_commit);
-      THROW_WALLET_EXCEPTION_IF(string_tools::validate_hex(64, ores.amount_outs[amount_key].outputs[i].public_key), error::wallet_internal_error, "Invalid public_key");
+      THROW_WALLET_EXCEPTION_IF(!string_tools::validate_hex(64, ores.amount_outs[amount_key].outputs[i].public_key), error::wallet_internal_error, "Invalid public_key");
       string_tools::hex_to_pod(ores.amount_outs[amount_key].outputs[i].public_key, tx_public_key);
       const uint64_t global_index = ores.amount_outs[amount_key].outputs[i].global_index;
       if(!light_wallet_parse_rct_str(ores.amount_outs[amount_key].outputs[i].rct, tx_public_key, 0, mask, rct_commit, false))
@@ -10155,14 +10155,14 @@ void wallet2::light_wallet_get_unspent_outs()
     bool add_transfer = true;
     crypto::key_image unspent_key_image;
     crypto::public_key tx_public_key = AUTO_VAL_INIT(tx_public_key);
-    THROW_WALLET_EXCEPTION_IF(string_tools::validate_hex(64, o.tx_pub_key), error::wallet_internal_error, "Invalid tx_pub_key field");
+    THROW_WALLET_EXCEPTION_IF(!string_tools::validate_hex(64, o.tx_pub_key), error::wallet_internal_error, "Invalid tx_pub_key field");
     string_tools::hex_to_pod(o.tx_pub_key, tx_public_key);
     
     for (const std::string &ski: o.spend_key_images) {
       spent = false;
 
       // Check if key image is ours
-      THROW_WALLET_EXCEPTION_IF(string_tools::validate_hex(64, ski), error::wallet_internal_error, "Invalid key image");
+      THROW_WALLET_EXCEPTION_IF(!string_tools::validate_hex(64, ski), error::wallet_internal_error, "Invalid key image");
       string_tools::hex_to_pod(ski, unspent_key_image);
       if(light_wallet_key_image_is_ours(unspent_key_image, tx_public_key, o.index)){
         MTRACE("Output " << o.public_key << " is spent. Key image: " <<  ski);
@@ -10177,9 +10177,9 @@ void wallet2::light_wallet_get_unspent_outs()
     crypto::hash txid;
     crypto::public_key tx_pub_key;
     crypto::public_key public_key;
-    THROW_WALLET_EXCEPTION_IF(string_tools::validate_hex(64, o.tx_hash), error::wallet_internal_error, "Invalid tx_hash field");
-    THROW_WALLET_EXCEPTION_IF(string_tools::validate_hex(64, o.public_key), error::wallet_internal_error, "Invalid public_key field");
-    THROW_WALLET_EXCEPTION_IF(string_tools::validate_hex(64, o.tx_pub_key), error::wallet_internal_error, "Invalid tx_pub_key field");
+    THROW_WALLET_EXCEPTION_IF(!string_tools::validate_hex(64, o.tx_hash), error::wallet_internal_error, "Invalid tx_hash field");
+    THROW_WALLET_EXCEPTION_IF(!string_tools::validate_hex(64, o.public_key), error::wallet_internal_error, "Invalid public_key field");
+    THROW_WALLET_EXCEPTION_IF(!string_tools::validate_hex(64, o.tx_pub_key), error::wallet_internal_error, "Invalid tx_pub_key field");
     string_tools::hex_to_pod(o.tx_hash, txid);
     string_tools::hex_to_pod(o.public_key, public_key);
     string_tools::hex_to_pod(o.tx_pub_key, tx_pub_key);
@@ -10325,8 +10325,8 @@ void wallet2::light_wallet_get_address_txs()
     {
       crypto::public_key tx_public_key;
       crypto::key_image key_image;
-      THROW_WALLET_EXCEPTION_IF(string_tools::validate_hex(64, so.tx_pub_key), error::wallet_internal_error, "Invalid tx_pub_key field");
-      THROW_WALLET_EXCEPTION_IF(string_tools::validate_hex(64, so.key_image), error::wallet_internal_error, "Invalid key_image field");
+      THROW_WALLET_EXCEPTION_IF(!string_tools::validate_hex(64, so.tx_pub_key), error::wallet_internal_error, "Invalid tx_pub_key field");
+      THROW_WALLET_EXCEPTION_IF(!string_tools::validate_hex(64, so.key_image), error::wallet_internal_error, "Invalid key_image field");
       string_tools::hex_to_pod(so.tx_pub_key, tx_public_key);
       string_tools::hex_to_pod(so.key_image, key_image);
 
@@ -10343,9 +10343,9 @@ void wallet2::light_wallet_get_address_txs()
     crypto::hash payment_id = null_hash;
     crypto::hash tx_hash;
     
-    THROW_WALLET_EXCEPTION_IF(string_tools::validate_hex(64, t.payment_id), error::wallet_internal_error, "Invalid payment_id field");
-    THROW_WALLET_EXCEPTION_IF(string_tools::validate_hex(64, t.hash), error::wallet_internal_error, "Invalid hash field");
-    string_tools::hex_to_pod(t.payment_id, payment_id);
+    //THROW_WALLET_EXCEPTION_IF(!string_tools::validate_hex(64, t.payment_id), error::wallet_internal_error, "Invalid payment_id field");
+    THROW_WALLET_EXCEPTION_IF(!string_tools::validate_hex(64, t.hash), error::wallet_internal_error, "Invalid hash field");
+    if (string_tools::validate_hex(64, t.payment_id)) string_tools::hex_to_pod(t.payment_id, payment_id);
     string_tools::hex_to_pod(t.hash, tx_hash);
 
     // lightwallet specific info
@@ -10479,8 +10479,8 @@ bool wallet2::light_wallet_parse_rct_str(const std::string& rct_string, const cr
   rct::key encrypted_mask;
   std::string rct_commit_str = rct_string.substr(0,64);
   std::string encrypted_mask_str = rct_string.substr(64,64);
-  THROW_WALLET_EXCEPTION_IF(string_tools::validate_hex(64, rct_commit_str), error::wallet_internal_error, "Invalid rct commit hash: " + rct_commit_str);
-  THROW_WALLET_EXCEPTION_IF(string_tools::validate_hex(64, encrypted_mask_str), error::wallet_internal_error, "Invalid rct mask: " + encrypted_mask_str);
+  THROW_WALLET_EXCEPTION_IF(!string_tools::validate_hex(64, rct_commit_str), error::wallet_internal_error, "Invalid rct commit hash: " + rct_commit_str);
+  THROW_WALLET_EXCEPTION_IF(!string_tools::validate_hex(64, encrypted_mask_str), error::wallet_internal_error, "Invalid rct mask: " + encrypted_mask_str);
   string_tools::hex_to_pod(rct_commit_str, rct_commit);
   string_tools::hex_to_pod(encrypted_mask_str, encrypted_mask);
   if (decrypt) {
