@@ -7074,7 +7074,7 @@ void wallet2::commit_tx(pending_tx& ptx)
   if(m_light_wallet) 
   {
     cryptonote::COMMAND_RPC_SUBMIT_RAW_TX::request oreq;
-    cryptonote::COMMAND_RPC_SUBMIT_RAW_TX::response ores;
+    cryptonote::COMMAND_RPC_SUBMIT_RAW_TX::standard_response ores;
     oreq.address = get_account().get_public_address_str(m_nettype);
     oreq.view_key = string_tools::pod_to_hex(get_account().get_keys().m_view_secret_key);
     oreq.tx = epee::string_tools::buff_to_hex_nodelimer(tx_to_blob(ptx.tx));
@@ -7083,7 +7083,9 @@ void wallet2::commit_tx(pending_tx& ptx)
       bool r = epee::net_utils::invoke_http_json("/submit_raw_tx", oreq, ores, *m_http_client, rpc_timeout, "POST");
       THROW_WALLET_EXCEPTION_IF(!r, error::no_connection_to_daemon, "submit_raw_tx");
       // MyMonero and OpenMonero use different status strings
-      THROW_WALLET_EXCEPTION_IF(ores.status != "OK" && ores.status != "success" , error::tx_rejected, ptx.tx, get_rpc_status(ores.status), ores.error);
+      //THROW_WALLET_EXCEPTION_IF(ores.status != "OK" && ores.status != "success" , error::tx_rejected, ptx.tx, get_rpc_status(ores.status), ores.error);
+      // Standard lws uses boolean status
+      THROW_WALLET_EXCEPTION_IF(!ores.status, error::tx_rejected, ptx.tx, get_rpc_status(ores.status), "error while relaying tx");
     }
   }
   else
@@ -15168,6 +15170,13 @@ std::string wallet2::get_rpc_status(const std::string &s) const
     return s;
   if (s == CORE_RPC_STATUS_BUSY || s == CORE_RPC_STATUS_PAYMENT_REQUIRED)
     return s;
+  return "<error>";
+}
+//----------------------------------------------------------------------------------------------------
+std::string wallet2::get_rpc_status(const bool &s) const
+{
+  if (s)
+    return CORE_RPC_STATUS_OK;
   return "<error>";
 }
 //----------------------------------------------------------------------------------------------------

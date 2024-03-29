@@ -1823,6 +1823,7 @@ private:
     void on_device_progress(const hw::device_progress& event);
 
     std::string get_rpc_status(const std::string &s) const;
+    std::string get_rpc_status(const bool &s) const;
     void throw_on_rpc_response_error(bool r, const epee::json_rpc::error &error, const std::string &status, const char *method) const;
 
     std::string get_client_signature() const;
