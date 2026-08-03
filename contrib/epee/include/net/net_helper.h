@@ -34,6 +34,7 @@
 #include <boost/version.hpp>
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/ip/tcp.hpp>
+#include <boost/asio/post.hpp>
 #include <boost/asio/read.hpp>
 #include <boost/asio/ssl.hpp>
 #include <boost/asio/steady_timer.hpp>
@@ -102,6 +103,7 @@ namespace net_utils
 				m_connected(false),
 				m_deadline(m_io_service, std::chrono::steady_clock::time_point::max()),
 				m_shutdowned(false),
+				m_busy_count(0),
 				m_bytes_sent(0),
 				m_bytes_received(0)
 		{
@@ -128,7 +130,7 @@ namespace net_utils
 			~blocked_mode_client()
 		{
 			//profile_tools::local_coast lc("~blocked_mode_client()", 3);
-			try { shutdown(); }
+			try { disconnect(); }
 			catch(...) { /* ignore */ }
 		}
 
@@ -157,6 +159,12 @@ namespace net_utils
 
 				m_ssl_socket->next_layer() = connection.get();
 				m_deadline.cancel();
+				if (m_shutdowned)
+				{
+					boost::system::error_code ignored_ec;
+					m_ssl_socket->next_layer().close(ignored_ec);
+					return CONNECT_FAILURE; // aborted by shutdown() from another thread
+				}
 				if (m_ssl_socket->next_layer().is_open())
 				{
 					m_connected = true;
@@ -194,7 +202,9 @@ namespace net_utils
     inline
 			bool connect(const std::string& addr, const std::string& port, std::chrono::milliseconds timeout)
 		{
+			const busy_scope busy{m_busy_count};
 			m_connected = false;
+			m_shutdowned = false; // reset shutdown state so send/recv work on the new connection
 			try
 			{
 				m_ssl_socket->next_layer().close();
@@ -268,7 +278,7 @@ namespace net_utils
 		inline 
 		bool send(const boost::string_ref buff, std::chrono::milliseconds timeout)
 		{
-
+			const busy_scope busy{m_busy_count};
 			try
 			{
 				m_deadline.expires_after(timeout);
@@ -287,10 +297,23 @@ namespace net_utils
 				async_write(buff.data(), buff.size(), ec);
 
 				// Block until the asynchronous operation has completed.
-				while (ec == boost::asio::error::would_block)
+				while (ec == boost::asio::error::would_block && !m_shutdowned)
 				{
 					m_io_service.restart();
 					m_io_service.run_one(); 
+				}
+
+				// aborted by shutdown(): the pending handler references this frame, so
+				// close the socket and pump until it completes before returning
+				if (ec == boost::asio::error::would_block)
+				{
+					boost::system::error_code ignored_ec;
+					m_ssl_socket->next_layer().close(ignored_ec);
+					while (ec == boost::asio::error::would_block)
+					{
+						m_io_service.restart();
+						m_io_service.run_one();
+					}
 				}
 
 				if (ec)
@@ -331,7 +354,7 @@ namespace net_utils
 		inline 
 		bool recv(std::string& buff, std::chrono::milliseconds timeout)
 		{
-
+			const busy_scope busy{m_busy_count};
 			try
 			{
 				// Set a deadline for the asynchronous operation. Since this function uses
@@ -368,6 +391,18 @@ namespace net_utils
 					m_io_service.run_one(); 
 				}
 
+				// aborted by shutdown(): the pending handler references this frame, so
+				// close the socket and pump until it completes before returning
+				if (ec == boost::asio::error::would_block)
+				{
+					boost::system::error_code ignored_ec;
+					m_ssl_socket->next_layer().close(ignored_ec);
+					while (ec == boost::asio::error::would_block)
+					{
+						m_io_service.restart();
+						m_io_service.run_one();
+					}
+				}
 
 				if (ec)
 				{
@@ -417,21 +452,13 @@ namespace net_utils
 
 		bool shutdown()
 		{
-			m_deadline.cancel();
-			boost::system::error_code ec;
-			if(m_ssl_options)
-				shutdown_ssl();
-			m_ssl_socket->next_layer().cancel(ec);
-			if(ec)
-				MDEBUG("Problems at cancel: " << ec.message());
-			m_ssl_socket->next_layer().shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
-			if(ec)
-				MDEBUG("Problems at shutdown: " << ec.message());
-			m_ssl_socket->next_layer().close(ec);
-			if(ec)
-				MDEBUG("Problems at close: " << ec.message());
+			// callable from any thread: only touch atomics and post(); the blocked
+			// caller observes m_shutdowned, fails, and closes the socket itself
+			if (m_busy_count == 0)
+				return true; // nothing in flight; leave the idle connection intact
 			m_shutdowned = true;
-      m_connected = false;
+			m_connected = false;
+			boost::asio::post(m_io_service, []{}); // wake a run_one() blocked in connect/send/recv
 			return true;
 		}
 
@@ -446,6 +473,14 @@ namespace net_utils
 		}
 
 	private:
+
+		// marks a blocking operation in flight so shutdown() only aborts live work
+		struct busy_scope
+		{
+			std::atomic<unsigned>& m_count;
+			busy_scope(std::atomic<unsigned>& count) : m_count(count) { ++m_count; }
+			~busy_scope() { --m_count; }
+		};
 
 		void check_deadline()
 		{
@@ -516,9 +551,10 @@ namespace net_utils
 		std::shared_ptr<boost::asio::ssl::stream<boost::asio::ip::tcp::socket>> m_ssl_socket;
 		std::function<connect_func> m_connector;
 		ssl_options_t m_ssl_options;
-		bool m_connected;
+		std::atomic<bool> m_connected;
 		boost::asio::steady_timer m_deadline;
 		std::atomic<bool> m_shutdowned;
+		std::atomic<unsigned> m_busy_count;
 		std::atomic<uint64_t> m_bytes_sent;
 		std::atomic<uint64_t> m_bytes_received;
 	};

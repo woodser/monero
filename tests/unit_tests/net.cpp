@@ -94,6 +94,50 @@ namespace
         "zpv4fa3szgel7vf6jdjeugizdclq2vzkelscs2bhbgnlldzzggcen3ac.onion";
 }
 
+TEST(blocked_mode_client, shutdown_aborts_blocked_recv)
+{
+    boost::asio::io_context server_io;
+    boost::asio::ip::tcp::acceptor acceptor{
+        server_io,
+        {boost::asio::ip::address_v4::loopback(), 0}
+    };
+
+    epee::net_utils::blocked_mode_client client;
+    client.set_ssl(epee::net_utils::ssl_options_t{
+        epee::net_utils::ssl_support_t::e_ssl_support_disabled
+    });
+    const std::string port = std::to_string(acceptor.local_endpoint().port());
+    ASSERT_TRUE(client.connect("127.0.0.1", port, std::chrono::seconds{5}));
+
+    boost::system::error_code error;
+    boost::asio::ip::tcp::socket peer{server_io};
+    acceptor.accept(peer, error);
+    ASSERT_FALSE(error);
+
+    // shutdown with nothing in flight is a no-op that leaves the connection usable
+    EXPECT_TRUE(client.shutdown());
+    EXPECT_TRUE(client.is_connected());
+
+    // recv blocks on the silent peer; shutdown from another thread aborts it promptly
+    std::thread stopper{[&client] {
+        std::this_thread::sleep_for(std::chrono::milliseconds{100});
+        EXPECT_TRUE(client.shutdown());
+    }};
+    std::string response;
+    const auto start = std::chrono::steady_clock::now();
+    EXPECT_FALSE(client.recv(response, std::chrono::seconds{30}));
+    EXPECT_LT(std::chrono::steady_clock::now() - start, std::chrono::seconds{10});
+    stopper.join();
+    EXPECT_FALSE(client.is_connected());
+
+    // the aborted client reconnects on next use
+    ASSERT_TRUE(client.connect("127.0.0.1", port, std::chrono::seconds{5}));
+    boost::asio::ip::tcp::socket second_peer{server_io};
+    acceptor.accept(second_peer, error);
+    ASSERT_FALSE(error);
+    EXPECT_TRUE(client.is_connected());
+}
+
 TEST(tor_address, constants)
 {
     static_assert(!net::tor_address::is_local(), "bad is_local() response");
