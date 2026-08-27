@@ -47,6 +47,7 @@
 
 #include "include_base_utils.h"
 #include "cryptonote_basic/account.h"
+#include "device/device_default.hpp"
 #include "cryptonote_basic/account_boost_serialization.h"
 #include "cryptonote_basic/cryptonote_basic_impl.h"
 #include "net/http.h"
@@ -1969,6 +1970,7 @@ private:
     bool should_expand(const cryptonote::subaddress_index &index) const;
     bool spends_one_of_ours(const cryptonote::transaction &tx) const;
 
+    hw::core::device_default m_software_device; // per-wallet software device so wallets do not share signing mode; declared before m_account, which points to it
     cryptonote::account_base m_account;
     boost::optional<epee::net_utils::http::login> m_daemon_login;
     std::string m_daemon_address;

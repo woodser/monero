@@ -1277,6 +1277,7 @@ wallet2::wallet2(network_type nettype, uint64_t kdf_rounds, bool unattended, std
   m_allow_mismatched_daemon_version(false)
 {
   set_rpc_client_secret_key(rct::rct2sk(rct::skGen()));
+  m_account.set_device(m_software_device); // hardware wallet paths replace this with their own device
 }
 
 wallet2::~wallet2()
@@ -5375,6 +5376,7 @@ bool wallet2::load_keys_buf(const std::string& keys_buf, const epee::wipeable_st
 
   r = epee::serialization::load_t_from_binary(m_account, account_data);
   THROW_WALLET_EXCEPTION_IF(!r, error::invalid_password);
+  m_account.set_device(m_software_device); // in case a hardware device was bound previously; hardware paths rebind below
   if (m_key_device_type == hw::device::device_type::LEDGER || m_key_device_type == hw::device::device_type::TREZOR) {
     LOG_PRINT_L0("Account on device. Initing device...");
     hw::device &hwdev = lookup_device(m_device_name);
@@ -5654,6 +5656,7 @@ void wallet2::init_type(hw::device::device_type device_type)
   m_multisig_signers.clear();
   m_original_keys_available = false;
   m_key_device_type = device_type;
+  if (device_type == hw::device::device_type::SOFTWARE) m_account.set_device(m_software_device); // in case a hardware device was bound previously
 }
 
 /*!
@@ -6770,6 +6773,7 @@ void wallet2::process_background_cache_on_open()
     cryptonote::account_base account = m_account;
     account.forget_spend_key();
     background_w2->m_account = account;
+    background_w2->m_account.set_device(background_w2->m_software_device); // the copied account points at this wallet's device
 
     // Load background cache from file
     background_w2->clear();
