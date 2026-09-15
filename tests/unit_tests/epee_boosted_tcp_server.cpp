@@ -90,6 +90,17 @@ namespace
   typedef epee::net_utils::boosted_tcp_server<test_protocol_handler> test_tcp_server;
 }
 
+TEST(boosted_tcp_server, per_ip_timeout_shift_without_limits)
+{
+  using handler = epee::levin::async_protocol_handler<test_connection_context>;
+  epee::net_utils::connection<handler>::shared_state state;
+  for (unsigned shift = 0; shift <= 8; ++shift)
+  {
+    EXPECT_EQ(shift, epee::net_utils::detail::get_per_ip_timeout_shift(state, false, 200, shift));
+    EXPECT_EQ(shift, epee::net_utils::detail::get_per_ip_timeout_shift(state, true, 200, shift));
+  }
+}
+
 TEST(boosted_tcp_server, worker_threads_are_exception_resistant)
 {
   test_tcp_server srv(epee::net_utils::e_connection_type_RPC); // RPC disables network limit for unit tests
