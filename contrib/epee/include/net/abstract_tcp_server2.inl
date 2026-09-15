@@ -50,6 +50,7 @@
 #include <sstream>
 #include <iomanip>
 #include <algorithm>
+#include <cstdint>
 #include <functional>
 #include <random>
 
@@ -74,6 +75,23 @@ namespace net_utils
     CHECK_AND_ASSERT_THROW_MES(bool(ptr), "shared_state cannot be null");
     return *ptr;
   }
+
+  namespace detail
+  {
+    inline unsigned get_per_ip_timeout_shift(const connection_basic_shared_state&, bool, unsigned, unsigned shift)
+    {
+      return shift;
+    }
+
+    template<typename T>
+    auto get_per_ip_timeout_shift(const T& state, bool local, unsigned count, unsigned shift)
+      -> decltype(state.m_max_private_ip_connections, state.m_max_public_ip_connections, unsigned{})
+    {
+      // Honor larger per-IP allowances without shortening existing timeouts.
+      const std::size_t limit = local ? state.m_max_private_ip_connections : state.m_max_public_ip_connections;
+      return limit ? static_cast<unsigned>(std::min<std::uint64_t>(shift, (std::uint64_t(count) * 8) / limit)) : 0;
+    }
+  } // namespace detail
 
   /************************************************************************/
   /*                                                                      */
@@ -105,10 +123,13 @@ namespace net_utils
       std::min(std::max(count, 1u) - 1, 8u) :
       0
     );
+    const unsigned scaled_shift = detail::get_per_ip_timeout_shift(
+      static_cast<const shared_state&>(connection_basic::get_state()), m_local, count, shift
+    );
     return (
       m_local ?
-      std::chrono::milliseconds(DEFAULT_TIMEOUT_MS_LOCAL >> shift) :
-      std::chrono::milliseconds(DEFAULT_TIMEOUT_MS_REMOTE >> shift)
+      std::chrono::milliseconds(DEFAULT_TIMEOUT_MS_LOCAL >> scaled_shift) :
+      std::chrono::milliseconds(DEFAULT_TIMEOUT_MS_REMOTE >> scaled_shift)
     );
   }
 

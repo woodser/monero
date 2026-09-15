@@ -28,6 +28,7 @@
 // 
 
 #include <atomic>
+#include <limits>
 #include <boost/asio/connect.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/beast/core.hpp>
@@ -94,6 +95,40 @@ namespace
     std::atomic<std::size_t> dummy_size;
   };
 } // anonymous
+
+TEST(http_server, per_ip_timeout_shift)
+{
+  using connection = epee::net_utils::connection<epee::net_utils::http::http_custom_handler<epee::net_utils::connection_context_base>>;
+  using epee::net_utils::detail::get_per_ip_timeout_shift;
+  connection::shared_state state;
+  state.m_max_public_ip_connections = 3;
+  state.m_max_private_ip_connections = 200;
+
+  struct test_case
+  {
+    bool local;
+    unsigned count;
+    unsigned shift;
+    unsigned expected;
+  };
+  const test_case cases[] = {
+    {false, 1, 0, 0}, {false, 2, 1, 1}, {false, 3, 2, 2},
+    {true, 0, 0, 0}, {true, 9, 8, 0}, {true, 24, 8, 0},
+    {true, 25, 8, 1}, {true, 50, 8, 2}, {true, 121, 8, 4},
+    {true, 150, 8, 6}, {true, 175, 8, 7}, {true, 199, 8, 7},
+    {true, 200, 8, 8}, {true, 201, 8, 8}, {true, 200, 0, 0}
+  };
+  for (const auto &test : cases)
+  {
+    SCOPED_TRACE(test.count);
+    EXPECT_EQ(test.expected, get_per_ip_timeout_shift(state, test.local, test.count, test.shift));
+  }
+
+  state.m_max_private_ip_connections = 0;
+  EXPECT_EQ(0u, get_per_ip_timeout_shift(state, true, 9, 8));
+  state.m_max_private_ip_connections = std::numeric_limits<unsigned>::max();
+  EXPECT_EQ(8u, get_per_ip_timeout_shift(state, true, std::numeric_limits<unsigned>::max(), 8));
+}
 
 TEST(http_server, response_soft_limit)
 {
