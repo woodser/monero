@@ -655,6 +655,43 @@ TEST_P(blocked_mode_client_ssl, disconnect_with_pending_probe_is_graceful)
     EXPECT_FALSE(peer_error);
 }
 
+TEST_P(blocked_mode_client_ssl, disconnect_after_peer_eof_is_graceful)
+{
+    boost::system::error_code peer_error = boost::asio::error::would_block;
+    io.restart();
+    boost::asio::steady_timer deadline{io, std::chrono::seconds{5}};
+    deadline.async_wait([this](const boost::system::error_code& error) {
+        if (!error)
+        {
+            boost::system::error_code ignored;
+            peer->next_layer().close(ignored);
+        }
+    });
+    peer->async_shutdown([&](const boost::system::error_code& error) {
+        peer_error = error;
+        deadline.cancel();
+    });
+    std::thread server{[this] { io.run(); }};
+    std::string response;
+    EXPECT_TRUE(client.recv(response, std::chrono::seconds{5}));
+    EXPECT_TRUE(response.empty());
+    EXPECT_FALSE(client.is_connected());
+    EXPECT_TRUE(client.disconnect());
+    server.join();
+    EXPECT_FALSE(peer_error);
+}
+
+TEST_P(blocked_mode_client_ssl, disconnect_after_shutdown_does_not_wait_for_peer)
+{
+    ASSERT_TRUE(client.is_connected());
+    ASSERT_TRUE(client.shutdown());
+    // permanent shutdown must not wait for the peer's TLS close alert
+    const auto start = std::chrono::steady_clock::now();
+    EXPECT_TRUE(client.disconnect());
+    EXPECT_LT(std::chrono::steady_clock::now() - start, std::chrono::seconds{1});
+    EXPECT_FALSE(client.is_connected());
+}
+
 INSTANTIATE_TEST_SUITE_P(tls, blocked_mode_client_ssl, testing::Values(
     TLS1_2_VERSION
 #if OPENSSL_VERSION_NUMBER >= 0x10101000L && !defined(LIBRESSL_VERSION_NUMBER)
