@@ -327,7 +327,7 @@ namespace net_utils
 		{
 			try
 			{	
-				if(m_connected)
+				if(!shutdown_requested() && m_ssl_socket->next_layer().is_open())
 				{
 					m_connected = false;
 					if(m_ssl_options)
