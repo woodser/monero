@@ -3001,6 +3001,15 @@ void wallet2::process_outgoing(const crypto::hash &txid, const cryptonote::trans
     entry.first->second.m_subaddr_account = subaddr_account;
     entry.first->second.m_subaddr_indices = subaddr_indices;
   }
+  else if (spent > entry.first->second.m_amount_in)
+  {
+    // a previous pool scan or key image import may have missed some spent inputs
+    // only raise the totals, since a later scan can have fewer known key images
+    entry.first->second.m_amount_in = spent;
+    entry.first->second.m_amount_out = get_outgoing_amount(tx, spent);
+    if (subaddr_account == entry.first->second.m_subaddr_account)
+      entry.first->second.m_subaddr_indices.insert(subaddr_indices.begin(), subaddr_indices.end());
+  }
 
   entry.first->second.m_rings.clear();
   for (const auto &in: tx.vin)
